@@ -1,0 +1,7 @@
+[package]
+name = "socks5"
+version = "0.1.0"
+authors = ["Tingyi Wan <tingyi_wan@kingdee.com>"]
+
+[dependencies]
+mioco = "*"
