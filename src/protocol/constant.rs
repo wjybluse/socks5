@@ -1,11 +1,9 @@
-pub const METHODS: u8 = 258;
-pub const NMETHODS: u8 =1;
-pub const VER: u8 = 0;
+pub const VER: usize = 0;
 
 //for request
-pub  const CMD: u8 = 1;
-pub  const RSV: u8 = 1;
-pub  const ATYP: u8 = 1;
+pub  const CMD: usize = 1;
+pub  const RSV: usize = 1;
+pub  const ATYP: usize = 1;
 
 //ip type
 pub  const IPV4: u8= 0x01;
@@ -18,7 +16,6 @@ pub  const BIND: u8= 0x02;
 pub  const UDP: u8= 0x03;
 
 //method type
-pub  const NO_AUTHENTICATION: u8= 0x00;
 pub  const GSSAPI: u8= 0x01;
 pub  const AUTHENTICATION: u8= 0x02;
 pub  const IANA: u8= 0x03;
@@ -27,8 +24,18 @@ pub  const NO_ACCEPTABLE: u8= 0xff;
 
 
 //ip length
-pub  const IPV4_LEN: u8= 4u8;
-pub  const IPV6_LEN: u8= 16u8;
+pub  const IPV4_LEN: usize= 4;
+pub  const IPV6_LEN: usize= 16;
 
 //version
 pub const SOCKS5: u8 = 0x05;
+
+//error
+pub const COMMON_ERR: usize = 0x01;
+pub const CONNECT_ERR: usize = 0x02;
+pub const NETWORK_UNREACHABLE_ERR: usize = 0x03;
+pub const HOST_UNREACHABLE_ERR: usize = 0x04;
+pub const CONNECT_REFUSED_ERR: usize = 0x05;
+pub const TTL_EXPIRED_ERR: usize = 0x06;
+pub const CMD_NOT_SUPPORT_ERR: usize = 0x07;
+pub const ADDRESS_TYPE_NOT_SUPPORT_ERR: usize = 0x08;
