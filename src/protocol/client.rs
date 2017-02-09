@@ -86,6 +86,7 @@ impl<'a> Request for Client<'a> {
         let headers = String::from_utf8(header[..real_size].to_vec()).unwrap();
         let mut port: u16 = 80;
         let mut host: String;
+        let mut https: bool = false;
         let mut url = match headers.split_whitespace().nth(1) {
             Some(_url) => _url,
             None => return Err(SocksError::CommonError(0x01, "invalid url".to_string())),
@@ -93,6 +94,11 @@ impl<'a> Request for Client<'a> {
         // parser ur1
         if url.contains("https") {
             port = 443;
+            https = true;
+        }
+
+        if !url.contains("http") {
+            https = true;
         }
 
         // what's the fuck api
@@ -135,12 +141,17 @@ impl<'a> Request for Client<'a> {
             _stream.shutdown(Shutdown::Both);
             return Err(SocksError::CommonError(0x01, "connect unreachable".to_string()));
         }
-        stream.write("HTTP/1.1 200 Connection Established\r\n\r\n".as_bytes());
+        if https {
+            stream.write("HTTP/1.1 200 Connection Established\r\n\r\n".as_bytes());
+        }
+
         // current test just for ipv4 and domain
         let mut client_write = _stream.try_clone().unwrap();
         let mut server_read = stream.try_clone().unwrap();
         let rh = mioco::spawn(move || {
-            // client_write.write(&mut header[..real_size]).unwrap();
+            if !https {
+                client_write.write(&mut header);
+            }
             io::copy(&mut server_read, &mut client_write);
             server_read.shutdown(Shutdown::Read);
             client_write.shutdown(Shutdown::Write);
