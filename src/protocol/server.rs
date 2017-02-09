@@ -1,18 +1,17 @@
 use std::net::{TcpListener, TcpStream, Ipv4Addr, Ipv6Addr, SocketAddrV4, Shutdown, SocketAddr};
 use std::thread;
-use std::io::copy;
 use std::io::prelude::*;
+use std::io::copy;
 use super::common::{SocksError, convert_port, build_result};
 use std::iter::FromIterator;
 use super::constant;
+use std::time::Duration;
 use mioco;
 #[derive(Debug,Clone)]
 pub struct Server {
     host: String,
     port: u16,
 }
-
-
 
 impl Server {
     pub fn new(host: String, port: u16) -> Server {
@@ -108,73 +107,26 @@ impl Server {
                                                "invalid version".to_string()));
         }
         let cmd = buffer_vec[1];
-        let ip_type = buffer_vec[3];
-        // default is ipv4
-        let mut ip_len = constant::IPV4_LEN;
-        match ip_type {
-            constant::IPV4 => ip_len = constant::IPV4_LEN,
-            // the last is port size
-            constant::DOMAIN => ip_len = size - 2 - fix_len,//this is domain
-            constant::IPV6 => ip_len = constant::IPV6_LEN,
-            _ => ip_len = 0,
-        }
-        if ip_len == 0 {
-            stream.write(&build_result(constant::ADDRESS_TYPE_NOT_SUPPORT_ERR,
-                                       "ip type not support".to_string()));
-            return Err(SocksError::CommonError(constant::ADDRESS_TYPE_NOT_SUPPORT_ERR,
-                                               "Address type not supported".to_string()));
-        }
+
         // get ip stream all
-        let mut _domain: Vec<u8> = buffer_vec.drain(4..).take(ip_len + 2).collect();
+        // clone buffer to client
+        // fuck ????
+        let mut _domain: Vec<u8> = buffer_vec.drain(3..).take(size - 3).collect();
         match cmd {
             constant::BIND => {
                 let mut s = Server::handle_bind(&mut _domain).unwrap();
                 Ok(())
             }
             constant::CONNECT => {
-                let result = Server::handle_connect(&mut _domain);
-                let mut s: Box<TcpStream>;
-                // local ip address and port
-                match result {
-                    Err(e) => {
-                        let SocksError::CommonError(code, _) = e;
-                        let mut rsp: Vec<u8> = vec![0x05, code as u8, 0x00, ip_type];
-                        rsp.append(&mut vec![127u8, 0, 0, 1, 0, 0]);
-                        stream.write(rsp.as_slice());
-                        stream.shutdown(Shutdown::Both);
-                        return Err(e);
-                    }
-                    Ok(_s) => s = _s,
-                }
-                // write value
-                let mut rsp: Vec<u8> = vec![0x05, 0x00, 0x00, ip_type];
-                // rsp.append(&mut vec![127u8,0,0,1,0,0]);
-
-                let host = stream.local_addr().unwrap();
-                // let ip = host.ip();
-                match host {
-                    SocketAddr::V4(ipv4) => {
-                        rsp.append(&mut ipv4.ip().octets().to_vec());
-                        let port: u16 = ipv4.port();
-                        // rsp.append(ipv4.port());
-                        rsp.append(&mut [port as u8, (port >> 8) as u8].to_vec());
-                    }
-                    SocketAddr::V6(ipv6) => {
-                        // TODO
-                        rsp.append(&mut ipv6.ip().octets().to_vec());
-                        let port: u16 = ipv6.port();
-                        // rsp.append(ipv4.port());
-                        rsp.append(&mut [port as u8, (port >> 8) as u8].to_vec());
-                    }
-                }
-                stream.write(rsp.as_slice());
+                let mut _stream_clone = stream.try_clone().unwrap();
+                let s = Server::handle_connect(&mut _domain, &mut _stream_clone).unwrap();
 
                 let mut client_reader = stream.try_clone().unwrap();
                 // clone s stream
                 let mut server_writer = s.try_clone().unwrap();
                 // move
                 let rh = mioco::spawn(move || {
-                    copy(&mut client_reader, &mut server_writer);
+                    copy(&mut client_reader, &mut server_writer).unwrap();
                     client_reader.shutdown(Shutdown::Read);
                     server_writer.shutdown(Shutdown::Write);
                 });
@@ -182,10 +134,8 @@ impl Server {
                 let mut client_writer = stream.try_clone().unwrap();
                 // clone s stream
                 let mut server_reader = s.try_clone().unwrap();
-
                 let wh = mioco::spawn(move || {
-                    copy(&mut server_reader, &mut client_writer);
-                    // close tunnel
+                    copy(&mut server_reader, &mut client_writer).unwrap();
                     server_reader.shutdown(Shutdown::Read);
                     client_writer.shutdown(Shutdown::Write);
                 });
@@ -207,35 +157,71 @@ impl Server {
 
     }
 
-    fn handle_bind(domain: &mut Vec<u8>) -> Result<Box<TcpStream>, SocksError> {
+    fn handle_bind(domain: &mut Vec<u8>) -> Result<TcpStream, SocksError> {
         let start = domain.len() - 2;
         let port = convert_port(domain.drain(start..).take(2).collect());
-        let address = String::from_utf8(domain.drain(0..start).collect()).unwrap();
+        let address = String::from_utf8(domain.drain(0..).take(start).collect()).unwrap();
         let host = format!("{}:{}", address, port);
         let mut stream = try!(TcpStream::connect(&*host));
-        Ok(Box::new(stream))
+        Ok(stream)
     }
 
-    fn handle_connect(domain: &mut Vec<u8>) -> Result<Box<TcpStream>, SocksError> {
-        let start = domain.len() - 2;
-        let port = convert_port(domain.drain(start..).take(2).collect());
-        let mut _host: Vec<u8> = domain.drain(0..start).collect();
+    fn handle_connect(domain: &mut Vec<u8>,
+                      stream: &mut TcpStream)
+                      -> Result<TcpStream, SocksError> {
+        let ip_type = domain[0];
+        // default is ipv4
+        let mut ip_len = constant::IPV4_LEN;
+        let mut start = 1;
+        match ip_type {
+            constant::IPV4 => ip_len = constant::IPV4_LEN + 2,
+            // the last is port size
+            constant::DOMAIN => {
+                ip_len = domain[1] as usize + 2; //address + port
+                start = 2;
+            }//this is domain
+            constant::IPV6 => ip_len = constant::IPV6_LEN + 2,
+            _ => {
+                stream.write(&mut [0x05,
+                                   constant::ADDRESS_TYPE_NOT_SUPPORT_ERR as u8,
+                                   0x00,
+                                   0x01,
+                                   127,
+                                   0x00,
+                                   0x00,
+                                   0x01,
+                                   0x00,
+                                   0x00]);
+                stream.shutdown(Shutdown::Both);
+                return Err(SocksError::CommonError(constant::ADDRESS_TYPE_NOT_SUPPORT_ERR,
+                                                   "ip address not supported ".to_string()));
+            }
+        }
+
+        let host = stream.local_addr().unwrap();
+        let mut rsp: Vec<u8> =
+            vec![constant::SOCKS5, 0x00, 0x00, constant::IPV4, 127, 0x00, 0x00, 0x01, 0x00, 0x00];
+
+        stream.write(rsp.as_slice());
+        let _portindex = domain.len() - 2;
+        let raw = domain.clone();
+        let port = convert_port(domain.drain(_portindex..).take(2).collect());
+        let mut _host: Vec<u8> = domain.drain(start..).collect();
         // clone new value,fuck rust move
         let _host_clone: Vec<u8> = _host.clone();
         let _domain = String::from_utf8(_host);
         if let Ok(address) = _domain {
-            let host = format!("{}:{}", address, port);
-            println!("handle hos is {:?}", host);
-            let mut stream = try!(TcpStream::connect(&*host));
-            Ok(Box::new(stream))
+            let host = format!("{}:{}", address, port as usize);
+            let mut s = try!(TcpStream::connect(&*host));
+            Ok(s)
         } else {
             if _host_clone.len() == 4 {
                 let ip = Ipv4Addr::new(_host_clone[0],
                                        _host_clone[1],
                                        _host_clone[2],
                                        _host_clone[3]);
-                let mut stream = try!(TcpStream::connect((ip, port)));
-                Ok(Box::new(stream))
+                let mut s = try!(TcpStream::connect((ip, port)));
+                Ok(s)
             } else {
                 Err(SocksError::CommonError(constant::CMD_NOT_SUPPORT_ERR,
                                             "Command not supported".to_string()))

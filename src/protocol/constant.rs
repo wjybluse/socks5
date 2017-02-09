@@ -7,8 +7,8 @@ pub const ATYP: usize = 1;
 
 // ip type
 pub const IPV4: u8 = 0x01;
-pub const IPV6: u8 = 0x03;
-pub const DOMAIN: u8 = 0x04;
+pub const IPV6: u8 = 0x04;
+pub const DOMAIN: u8 = 0x03;
 
 // cmd type
 pub const CONNECT: u8 = 0x01;
@@ -39,3 +39,5 @@ pub const CONNECT_REFUSED_ERR: usize = 0x05;
 pub const TTL_EXPIRED_ERR: usize = 0x06;
 pub const CMD_NOT_SUPPORT_ERR: usize = 0x07;
 pub const ADDRESS_TYPE_NOT_SUPPORT_ERR: usize = 0x08;
+
+pub const DEFAULT_SIZE: usize = 1024;
