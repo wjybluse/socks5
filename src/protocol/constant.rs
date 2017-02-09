@@ -41,3 +41,7 @@ pub const CMD_NOT_SUPPORT_ERR: usize = 0x07;
 pub const ADDRESS_TYPE_NOT_SUPPORT_ERR: usize = 0x08;
 
 pub const DEFAULT_SIZE: usize = 1024;
+
+// ipv4 pattern
+pub const IPV4_PATTERN: &'static str = "^(([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\.\
+                                        ){3}([01]?\\d\\d?|2[0-4]\\d|25[0-5])$";

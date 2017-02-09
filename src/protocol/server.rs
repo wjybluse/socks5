@@ -204,7 +204,6 @@ impl Server {
 
         stream.write(rsp.as_slice());
         let _portindex = domain.len() - 2;
-        let raw = domain.clone();
         let port = convert_port(domain.drain(_portindex..).take(2).collect());
         let mut _host: Vec<u8> = domain.drain(start..).collect();
         // clone new value,fuck rust move
@@ -212,6 +211,7 @@ impl Server {
         let _domain = String::from_utf8(_host);
         if let Ok(address) = _domain {
             let host = format!("{}:{}", address, port as usize);
+            println!("handle domain is {}", host);
             let mut s = try!(TcpStream::connect(&*host));
             Ok(s)
         } else {

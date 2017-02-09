@@ -1,6 +1,7 @@
 use std::io;
 use std::io::{Read, Write, ErrorKind};
 use super::constant;
+use regex::Regex;
 // for handshake
 
 #[derive(Debug)]
@@ -44,4 +45,9 @@ pub fn copy<R: ?Sized, W: ?Sized>(reader: &mut R, writer: &mut W) -> io::Result<
         write_len += len as u64;
     }
     Ok(write_len)
+}
+
+pub fn is_match(domain: &str) -> bool {
+    let pattern = Regex::new(constant::IPV4_PATTERN).unwrap();
+    return pattern.is_match(&domain);
 }

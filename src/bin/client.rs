@@ -9,7 +9,7 @@ fn main() {
             Ok((mut stream, _)) => {
                 thread::spawn(move || {
                     let client = Client::new("127.0.0.1", 1080u16);
-                    let result = client.exchange(&mut stream);
+                    let result = client.handle_http(&mut stream);
                     match result {
                         Ok(_) => {
                             println!("handle ok msg");

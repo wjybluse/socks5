@@ -1,10 +1,11 @@
 use std::net::{TcpStream, Shutdown, SocketAddr, Ipv4Addr, Ipv6Addr};
-use super::common::SocksError;
+use super::common::{SocksError, is_match};
 use std::default::Default;
 use super::constant;
 use std::io::prelude::*;
 use mioco;
 use std::io;
+use std::str::FromStr;
 #[derive(Default)]
 pub struct Client<'a> {
     host: &'a str,
@@ -14,7 +15,7 @@ pub struct Client<'a> {
 }
 
 pub trait Request {
-    fn exchange(&self, stream: &mut TcpStream) -> Result<(), SocksError>;
+    fn handle_http(&self, stream: &mut TcpStream) -> Result<(), SocksError>;
 }
 
 impl<'a> Client<'a> {
@@ -41,7 +42,7 @@ impl<'a> Client<'a> {
 }
 
 impl<'a> Request for Client<'a> {
-    fn exchange(&self, stream: &mut TcpStream) -> Result<(), SocksError> {
+    fn handle_http(&self, stream: &mut TcpStream) -> Result<(), SocksError> {
         let address = format!("{}:{}", self.host, self.port);
         let mut _stream = try!(TcpStream::connect(&*address));
         // define message size
@@ -78,35 +79,68 @@ impl<'a> Request for Client<'a> {
         let mut request: Vec<u8> = vec![0x05u8, constant::CONNECT, 0x00];
 
         // send request
-        let remote_addr = stream.peer_addr().unwrap();
-        match remote_addr {
-            SocketAddr::V4(ipv4) => {
-                request.append(&mut vec![constant::IPV4]);
-                request.append(&mut ipv4.ip().octets().to_vec());
-                let port: u16 = ipv4.port();
-                // rsp.append(ipv4.port());
-                request.append(&mut [port as u8, (port >> 8) as u8].to_vec());
-            }
-            SocketAddr::V6(ipv6) => {
-                // TODO
-                request.append(&mut vec![constant::IPV6]);
-                request.append(&mut ipv6.ip().octets().to_vec());
-                let port: u16 = ipv6.port();
-                // rsp.append(ipv4.port());
-                request.append(&mut [port as u8, (port >> 8) as u8].to_vec());
-            }
+        // read 1024 byte and parser header
+        let mut header: [u8; 1024] = [0; 1024];
+        let real_size = try!(stream.read(&mut header));
+        // to string
+        let headers = String::from_utf8(header[..real_size].to_vec()).unwrap();
+        let mut port: u16 = 80;
+        let mut host: String;
+        let mut url = match headers.split_whitespace().nth(1) {
+            Some(_url) => _url,
+            None => return Err(SocksError::CommonError(0x01, "invalid url".to_string())),
+        };
+        // parser ur1
+        if url.contains("https") {
+            port = 443;
         }
-        println!("request buffer is {:?}", request);
+
+        // what's the fuck api
+        let mut v: Vec<&str> = url.split("//").collect();
+        let mut host_index = 0;
+        if v.len() >= 2 {
+            host_index = 1;
+        }
+        if v[host_index].contains(":") {
+            let host_port: Vec<&str> = v[host_index].split(":").collect();
+            host = host_port[0].to_string();
+            let _port = host_port[1].replace("/", "");
+            port = u16::from_str(&_port).unwrap();
+        } else {
+            // some host contains url
+            // //???????
+            let mut _h: Vec<&str> = v[host_index].split("/").collect();
+            host = _h[0].to_string();
+        }
+        if is_match(&host) {
+            request.append(&mut vec![constant::IPV4]);
+            let v: Vec<&str> = host.split(".").collect();
+            request.append(&mut vec![v[0].as_ptr() as u8,
+                                     v[1].as_ptr() as u8,
+                                     v[2].as_ptr() as u8,
+                                     v[3].as_ptr() as u8]);
+            request.append(&mut vec![port as u8, (port >> 8) as u8]);
+        } else {
+            request.append(&mut vec![constant::DOMAIN]);
+            request.append(&mut vec![host.as_bytes().len() as u8]);
+            request.append(&mut host.as_bytes().to_vec());
+            request.append(&mut vec![(port >> 8) as u8, port as u8]);
+        }
+        // write rsp
+        //
         try!(_stream.write(&mut request));
         let mut rsp: [u8; 1024] = [0; 1024];
         try!(_stream.read(&mut rsp));
-        if rsp[0] != constant::SOCKS5 || rsp[1] == 0x00u8 {
+        if rsp[0] != constant::SOCKS5 || rsp[1] != 0x00u8 {
             _stream.shutdown(Shutdown::Both);
             return Err(SocksError::CommonError(0x01, "connect unreachable".to_string()));
         }
+        stream.write("HTTP/1.1 200 Connection Established\r\n\r\n".as_bytes());
+        // current test just for ipv4 and domain
         let mut client_write = _stream.try_clone().unwrap();
         let mut server_read = stream.try_clone().unwrap();
         let rh = mioco::spawn(move || {
+            // client_write.write(&mut header[..real_size]).unwrap();
             io::copy(&mut server_read, &mut client_write);
             server_read.shutdown(Shutdown::Read);
             client_write.shutdown(Shutdown::Write);
