@@ -1,7 +1,7 @@
 use std::net::{TcpStream, Shutdown, SocketAddr, Ipv4Addr, Ipv6Addr};
-use super::common::{SocksError, is_match};
+use super::super::common::{SocksError, is_match};
 use std::default::Default;
-use super::constant;
+use super::super::constant;
 use std::io::prelude::*;
 use mioco;
 use std::io;

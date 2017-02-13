@@ -1,5 +1,5 @@
 extern crate socks5;
-use socks5::protocol::client::{Client, Request};
+use socks5::protocol::tcp::tcp_client::{Client, Request};
 use std::net::TcpListener;
 use std::thread;
 fn main() {
