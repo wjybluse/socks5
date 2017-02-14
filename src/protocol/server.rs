@@ -10,6 +10,8 @@ use super::tcp::tcp_server::{TcpHandler, TcpstreamWrap};
 use std::iter::FromIterator;
 use std::convert::From;
 use std::time::Duration;
+use rand::distributions::{Range, IndependentSample};
+use rand;
 use mioco;
 #[derive(Debug,Clone)]
 pub struct Server {
@@ -127,18 +129,11 @@ impl Server {
                 }
             }
             constant::UDP => {
-                let port = 1080u16;
-                stream.write(&[constant::SOCKS5,
-                               0x00,
-                               0x00,
-                               constant::IPV4,
-                               0x7f,
-                               0x00,
-                               0x00,
-                               0x01,
-                               port as u8,
-                               (port >> 8) as u8]);
-                match UDPServer::new("127.0.0.1", port).handle_request() {
+                let between = Range::new(10000u16, 20000u16);
+                let mut rng = rand::thread_rng();
+                let mut p = between.ind_sample(&mut rng);
+                match UDPServer::new("127.0.0.1", p, &mut stream.try_clone().unwrap())
+                    .handle_request() {
                     Ok(_) => Ok(()),
                     Err(e) => Err(e),
                 }
@@ -163,8 +158,9 @@ impl Server {
     }
 
 
-    fn handle_udp(udp_host: &str, udp_port: u16) -> Result<(), SocksError> {
-        let udpserver = UDPServer::new(udp_host, udp_port);
+    fn handle_udp(udp_host: &str, udp_port: u16, stream: &mut TcpStream) -> Result<(), SocksError> {
+        let mut stream_clone = stream.try_clone().unwrap();
+        let udpserver = UDPServer::new(udp_host, udp_port, &mut stream_clone);
         Err(SocksError::CommonError(0x001, "error".to_string()))
     }
 }

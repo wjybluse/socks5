@@ -77,7 +77,6 @@ impl<'a> TcpstreamWrap<'a> {
         }
     }
 }
-
 impl<'a> TcpHandler for TcpstreamWrap<'a> {
     fn handle_request(&mut self) -> Result<(), SocksError> {
         let mut _stream_clone = self.tcpstream.try_clone().unwrap();

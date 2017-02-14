@@ -6,3 +6,4 @@ authors = ["Tingyi Wan <tingyi_wan@kingdee.com>"]
 [dependencies]
 mioco = "*"
 regex = "0.2"
+rand = "0.3"
